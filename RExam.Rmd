@@ -1,0 +1,379 @@
+---
+title: "Final exam - 4005537"
+author: "Hamidreza Parand"
+date: "April 20, 2024"
+output:
+  html_document:
+    theme: united
+  pdf_document: default
+---
+##Required packages, libraries, directory etc.
+```{r setup, echo=FALSE}
+Directory_path <- file.path("C:/Users/hamidreza/Desktop/rExam")
+library(haven)
+library(dplyr)
+library(qwraps2)
+options(qwraps2_markup = "markdown")
+library(knitr)
+library(ggplot2)
+knitr::opts_chunk$set(echo = TRUE)
+options(qwraps2_markup = "markdown")
+library(jtools)
+```
+## Question 1 - R Markdown [5 points]
+**Task**: Two files should be submitted: a Word/pdf/html document with
+explained results, and an Rmd file with the R code for the calculation of the results.
+**result**: Please find the knitted r markdown HTML file and the Rmd file by the name 4004577_RExam_23-24
+
+##Question 2 - Import, extract and save data [10 points]
+
+
+**Task a)**: Download the SPSS data file KiGGS03_06.sav from Moodle and import it into R. [2 points]
+```{r}
+kiggs_data <- read_sav(file.path(Directory_path, "KiGGS03_06.sav"))
+##performing visual data checks to see if the dataset has been correctly loaded
+kiggs_data %>% head()
+dim(kiggs_data)
+str(kiggs_data)
+nrow(kiggs_data)
+ncol(kiggs_data)
+##The results match the provided information in the data set documentation. 
+```
+
+
+
+
+**Task b)**: Create a new dataframe in R named kiggs, which contains the following variables (and only
+these): sex (sex), age (age2), social class (schichtz), whether the children have had a measles
+infection (e02002) and whether the children’s mother had anemia (e0153), a urinary tract
+infection (e0154) or hypertension (e0155) during pregnancy. [3 points]
+```{r}
+kiggs <- kiggs_data %>% select("sex", "age2", "schichtz", "e02002", "e0153", "e0154", "e0155")
+head(kiggs)
+tail(kiggs)
+summary(kiggs)
+```
+**Task c)**: Run the formatting steps in the provided Rmd file data_formatting.Rmd. [1 point]
+Explain in one sentence what these are doing. [1 point]
+
+```{r}
+##The following lines transform the original variables into categorical factors, and re-label each category with the corresponding range using understandable words instead of numeric codes.
+kiggs$sex      <- factor(kiggs$sex,      labels = c("boys", "girls"))
+kiggs$age2     <- factor(kiggs$age2,     labels = c("0-1y", "2-3y", "4-5y", "6-7y", "8-9y", "10-11y", "12-13y", "14-15y", "16-17y"))
+kiggs$schichtz <- factor(kiggs$schichtz, labels = c("low social status", "medium social status", "high social status"))
+kiggs$e02002    <- factor(kiggs$e02002,  labels = c("yes", "no", "don' know"))
+kiggs$e0153    <- factor(kiggs$e0153,  labels = c("yes", "no", "don't know"))
+kiggs$e0154    <- factor(kiggs$e0154,  labels = c("yes", "no", "don't know"))
+kiggs$e0155    <- factor(kiggs$e0155,  labels = c("yes", "no", "don't know"))
+```
+
+**Task d)**: Save this formatted dataframe on your computer, e.g. on your desktop. [2 point]
+```{r}
+save(kiggs, file = file.path(Directory_path, "kiggs.rdata"))
+```
+
+**Task e)**: Give the R command how to load this dataframe into R. [1 point]
+```{r}
+load(file = file.path(Directory_path , "kiggs.rdata"))
+```
+
+##Question 3 - Data transformations and data checks [10 points]
+**Task a)**:
+
+##1.Check that the variables e0153, e0154, e0155 are all factors. If they are not, transform them into factors. [2 points]
+```{r}
+is.factor(kiggs$e0153) & is.factor(kiggs$e0154) & is.factor(kiggs$e0155)
+```
+So the three variables are all factors and do not need to be transformed. Using an if condition and the "is.factor()" function we can simultaneously check if the variable is a factor and if not, using the "as.factor()" function transform it to a factor. Here is an example for the variable "e0153":
+
+```{r}
+if(!is.factor(kiggs$e0153))
+  {
+    kiggs$e0153 <- as.factor(kiggs$e0153)
+  }
+```
+##2. Set the value "don’t know" of all three variables to NA for all children. [1 point]
+```{r}
+kiggs$e0153 [kiggs$e0153 == "don't know"] <- NA
+kiggs$e0154 [kiggs$e0154 == "don't know"] <- NA
+kiggs$e0155 [kiggs$e0155 == "don't know"] <- NA
+#check if the transformation is done
+summary(kiggs$e0153)
+summary(kiggs$e0154)
+summary(kiggs$e0155)
+#the "don't know" level still exists
+```
+##3. Delete this now empty factor level from the variables. [1point]
+```{r}
+kiggs$e0153 <- droplevels(kiggs$e0153 , "don't know")
+kiggs$e0154 <- droplevels(kiggs$e0154 , "don't know")
+kiggs$e0155 <- droplevels(kiggs$e0155 , "don't know")
+```
+##4. Check whether these two steps worked as intended. [1 point]
+```{r}
+levels(kiggs$e0153)
+levels(kiggs$e0154)
+levels(kiggs$e0155)
+```
+##5. Now calculate the new variable burden as the sum of the events the children were exposed to during the mother’s pregnancy for each child (this is a number between 0 and 3). [3 points]
+```{r}
+kiggs$burden <- 0
+for(i in 1:nrow(kiggs))
+  {
+    if(kiggs[i, "e0153"] == "yes" || kiggs[i, "e0154"] == "yes" || kiggs[i, "e0155"] == "yes")
+    {
+      kiggs$burden[i] = 1
+    }
+    if((kiggs[i, "e0153"] == "yes" & kiggs[i, "e0154"] == "yes") || (kiggs[i, "e0154"] == "yes" & kiggs[i, "e0155"] == "yes") || (kiggs[i, "e0153"] == "yes" & kiggs[i, "e0155"] == "yes") )
+    {
+      kiggs$burden[i] = 2
+    }
+    if(kiggs[i, "e0153"] == "yes" & kiggs[i, "e0154"] == "yes" & kiggs[i, "e0155"] == "yes")
+    {
+      kiggs$burden[i] = 3
+    }
+  }
+```
+##What is the meaning of this new variable, does a high value mean that the children were exposed to many events during their mother’s pregnancy or that they were exposed to few events? [1 point]
+```{r}
+##The new variable burden is a count variable that shows, to how many of the three events included,had a child been exposed, during pregnancy. The value can be 0,1,2,and 3. For each child, a higher value for burden, means that the child has been exposed to more events during pregnancy. A higher frequency of any value of burden, shows that more children have been exposed to that many events during pregnancy. 
+table(kiggs$burden)
+```
+**Task b)**: Add this variable burden to the dataset kiggs, and save it in its updated form as an RData file
+(overwrite the previous file). [1 point]
+```{r}
+##using the R chunk under ##Question3/**Task a)**/##5. the variable burden is already added to the data set. The following line of code will save and overwrite the file kiggs.RData
+save(kiggs, file = file.path(Directory_path, "kiggs.rdata"))
+```
+
+##Question 4 - Descriptive statistics [20 points]
+**Task a)**: Consider the variables age2, sex, e02002 and burden and describe them with regard to the following criteria:
+##1. Calculate absolute frequency tables for all 4 variables and display them all together in one table or describe them in continuous text. [8 points]
+```{r, results = "asis"}
+#Transform variable burden to a factor.
+kiggs$burden    <- factor(kiggs$burden,  labels = c("0", "1", "2", "3"))
+frequency_list <- list(
+                        "Age" = list(
+                                      "0-1y" = ~ qwraps2::n_perc0(age2 == "0-1y", show_symbol = TRUE, na_rm = TRUE),
+                                      "2-3y" = ~ qwraps2::n_perc0(age2 == "2-3y", show_symbol = TRUE, na_rm = TRUE),
+                                      "4-5y" = ~ qwraps2::n_perc0(age2 == "4-5y", show_symbol = TRUE, na_rm = TRUE),
+                                      "6-7y" = ~ qwraps2::n_perc0(age2 == "6-7y", show_symbol = TRUE, na_rm = TRUE),
+                                      "8-9y" = ~ qwraps2::n_perc0(age2 == "8-9y", show_symbol = TRUE, na_rm = TRUE),
+                                      "10-11y" = ~ qwraps2::n_perc0(age2 == "10-11y", show_symbol = TRUE, na_rm = TRUE),
+                                      "12-13y" = ~ qwraps2::n_perc0(age2 == "12-13y", show_symbol = TRUE, na_rm = TRUE),
+                                      "14-15y" = ~ qwraps2::n_perc0(age2 == "14-15y", show_symbol = TRUE, na_rm = TRUE),
+                                      "16-17y" = ~ qwraps2::n_perc0(age2 == "16-17y", show_symbol = TRUE, na_rm = TRUE)
+                                    ),
+                        "Sex" = list( "Boys" = ~ qwraps2::n_perc0(sex == "boys", show_symbol = TRUE, na_rm = TRUE),
+                                      "Girls" = ~ qwraps2::n_perc0(sex == "girls", show_symbol = TRUE, na_rm = TRUE)
+                                    ),
+                        "Ever infected with Measles?" = list(
+                                                              "Yes" = ~ qwraps2::n_perc0(e02002 == "yes", show_symbol = TRUE, na_rm = TRUE),
+                                                              "No" = ~ qwraps2::n_perc0(e02002 == "no", show_symbol = TRUE, na_rm = TRUE),
+                                                              "Don't know" = ~ qwraps2::n_perc0(e02002 == "don't know", show_symbol = TRUE, na_rm = TRUE)
+                                                            ),
+                        "Burden" = list(
+                                        "0" = ~ qwraps2::n_perc0(burden == 0, show_symbol = TRUE, na_rm = TRUE),
+                                        "1" = ~ qwraps2::n_perc0(burden == 1, show_symbol = TRUE, na_rm = TRUE),
+                                        "2" = ~ qwraps2::n_perc0(burden == 2, show_symbol = TRUE, na_rm = TRUE),
+                                        "3" = ~ qwraps2::n_perc0(burden == 3, show_symbol = TRUE, na_rm = TRUE)
+                                       )
+                      )
+
+table_1 <- knitr::kable(
+  kiggs %>%
+    dplyr::select(age2, sex, e02002, burden) %>%
+    summary_table(., summaries = frequency_list),
+  caption = "Table 1. Absolute frequencies of levels of variables Age, Sex, Ever infected with Measels?, and Burden within The KiGGs dataset (Total number of observations in the dataset is 17640). Parentheses include percentages of total observations for each level."
+)
+print(table_1)
+```
+##2. Also indicate how many missing values each of these 4 variables has, and how many observations have complete data for all 4 variables. [4 points]
+```{r, results = "asis"}
+##Add missing data and also complete data count to the previous frequency_list and calling it frequency_missing_list.
+kiggs$complete_data <- complete.cases(kiggs$age2, kiggs$sex, kiggs$e02002, kiggs$burden)
+frequency_missing_list <- list(
+                        "Age" = list(
+                                      "0-1y" = ~ qwraps2::n_perc0(age2 == "0-1y", show_symbol = TRUE, na_rm = TRUE),
+                                      "2-3y" = ~ qwraps2::n_perc0(age2 == "2-3y", show_symbol = TRUE, na_rm = TRUE),
+                                      "4-5y" = ~ qwraps2::n_perc0(age2 == "4-5y", show_symbol = TRUE, na_rm = TRUE),
+                                      "6-7y" = ~ qwraps2::n_perc0(age2 == "6-7y", show_symbol = TRUE, na_rm = TRUE),
+                                      "8-9y" = ~ qwraps2::n_perc0(age2 == "8-9y", show_symbol = TRUE, na_rm = TRUE),
+                                      "10-11y" = ~ qwraps2::n_perc0(age2 == "10-11y", show_symbol = TRUE, na_rm = TRUE),
+                                      "12-13y" = ~ qwraps2::n_perc0(age2 == "12-13y", show_symbol = TRUE, na_rm = TRUE),
+                                      "14-15y" = ~ qwraps2::n_perc0(age2 == "14-15y", show_symbol = TRUE, na_rm = TRUE),
+                                      "16-17y" = ~ qwraps2::n_perc0(age2 == "16-17y", show_symbol = TRUE, na_rm = TRUE),
+                                      "Not Available" = ~ qwraps2::n_perc0(is.na(kiggs$age2), show_symbol = TRUE, na_rm = TRUE)
+                                    ),
+                        "Sex" = list(
+                                      "Boys" = ~ qwraps2::n_perc0(sex == "boys", show_symbol = TRUE, na_rm = TRUE),
+                                      "Girls" = ~ qwraps2::n_perc0(sex == "girls", show_symbol = TRUE, na_rm = TRUE),
+                                      "Not Available" = ~ qwraps2::n_perc0(is.na(kiggs$sex), show_symbol = TRUE, na_rm = TRUE)
+                                    ),
+                        "Ever infected with Measles?" = list(
+                                                              "Yes" = ~ qwraps2::n_perc0(e02002 == "yes", show_symbol = TRUE, na_rm = TRUE),
+                                                              "No" = ~ qwraps2::n_perc0(e02002 == "no", show_symbol = TRUE, na_rm = TRUE),
+                                                              "Don't know" = ~ qwraps2::n_perc0(e02002 == "don't know", show_symbol = TRUE, na_rm = TRUE),
+                                                              "Not Available" = ~ qwraps2::n_perc0(is.na(kiggs$e02002), show_symbol = TRUE, na_rm = TRUE)
+                                                            ),
+                        "Burden" = list(
+                                        "0" = ~ qwraps2::n_perc0(burden == 0, show_symbol = TRUE, na_rm = TRUE),
+                                        "1" = ~ qwraps2::n_perc0(burden == 1, show_symbol = TRUE, na_rm = TRUE),
+                                        "2" = ~ qwraps2::n_perc0(burden == 2, show_symbol = TRUE, na_rm = TRUE),
+                                        "3" = ~ qwraps2::n_perc0(burden == 3, show_symbol = TRUE, na_rm = TRUE),
+                                        "Not Available" = ~ qwraps2::n_perc0(is.na(kiggs$burden), show_symbol = TRUE, na_rm = TRUE)
+                                       )
+                      )
+table_2 <- knitr::kable(
+  kiggs %>%
+    dplyr::select(age2, sex, e02002, burden) %>%
+    summary_table(., summaries = frequency_missing_list),
+  caption = "Table 1. Absolute frequencies of levels of variables Age, Sex, Ever infected with Measels?, and Burden within The KiGGs dataset (Total number of observations in the dataset is 17640). The number of unavailable data for each variable is shown. The total number of observations with complete data on all 4 variables is shown. Parentheses include percentages of total observations for each level."
+)
+print(table_2)
+print(paste("Number of cases with complete data on all 4 variables:", sum(kiggs$complete_data)))
+```
+**Task b)**: 
+##1. For each of the 4 variables, select whether a barplot or a histogram is more suitable for displaying their distribution. [2 points]
+*Age (age2): The variable age is continuous in nature. However, it is categorized into bins (i.e. age groups). That categorization into bins is exactly how a histogram works. Therefore although I will use the function geom_bar to draw the graph ( and that technically makes the graph a barplot), the result represents a histogram for age distribution in the data set using the predefined age groups as bins.
+*Sex (sec): Sex is a nominal variable and is best visualized by a barplot.This argument holds true for the variable Having been infected with Measles (e02002), so for both a barplot would be suitable.
+*Burden (burden): This variable is a count variable, however it can not hold very varied values and is limited to a range of 0 to 3. It also does not represent a continuously measured phenomenon so I would prefer using a barplot for visualization of this variable as well.
+##2. Then create these 4 diagrams using functions in the ggplot package. [6 points]. You can also create the diagrams using functions in base R, but then only maximally get 3 of the 6 points.
+```{r}
+Figure1 <- ggplot(kiggs, aes(age2)) + geom_bar(fill = "lightgreen") +
+            labs(title = "Distribution of Age in KiGGS dataset", x = "Age Group", y = "Absolute Frequency")
+print(Figure1)
+```
+
+
+
+
+
+```{r}
+Figure2 <- ggplot(kiggs, aes(sex)) +
+            geom_bar(fill = "lightgreen") +
+              labs(title = "Distribution of Sex", x = "Sex", y = "Absolute Frequency") 
+print(Figure2)
+```
+```{r}
+Figure3 <- ggplot(kiggs, aes(e02002)) + 
+            geom_bar(fill = "lightgreen") +
+              labs(title = "Distribution of Measles Infection History", x = "Measles Infection", y = "Absolute Frequency")
+print(Figure3)
+```
+```{r}
+Figure4 <- ggplot(kiggs, aes(burden)) + 
+            geom_bar(fill = "lightgreen") +
+             labs(title = "Distribution of Burden", x = "Burden Level", y = "Absolute Frequency")
+print(Figure4)
+
+```
+
+
+##Question 5 – Logistic regression [20 points]
+**Task a)**:Calculate one logistic regression model to test for each of these 3 variables whether it has
+an association with measles disease yes/no. [3 points]
+```{r}
+# Logistic regression model for Age and Measles disease
+age_model <- glm(e02002 ~ age2, family = binomial(link = "logit"), data = kiggs)
+
+# Logistic regression model for Sex and Measles disease
+sex_model <- glm(e02002 ~ sex, family = binomial(link = "logit"), data = kiggs)
+
+# Logistic regression model for Burden and Measles disease
+burden_model <- glm(e02002 ~ burden, family = binomial(link = "logit"), data = kiggs)
+
+# Summarize results
+summ(age_model, exp = TRUE, confint = TRUE, model.fit = FALSE, digits = 3)
+summ(sex_model, exp = TRUE, confint = TRUE, model.fit = FALSE, digits = 3)
+summ(burden_model, exp = TRUE, confint = TRUE, model.fit = FALSE, digits = 3)
+```
+**Task b)**:
+##1. Report the estimated odds ratios for each predictor in the model, as well as the p-values from significance tests [6 points].
+
+## Age Groups:
+2-3 years:            Estimated odds ratio = 0.246, p-value = 0.030
+4-5 years:            Estimated odds ratio = 0.139, p-value = 0.001
+6-7 years:            Estimated odds ratio = 0.054, p-value < 0.001
+8-9 years:            Estimated odds ratio = 0.030, p-value < 0.001
+10-11 years:          Estimated odds ratio = 0.021, p-value < 0.001
+12-13 years:          Estimated odds ratio = 0.015, p-value < 0.001
+14-15 years:          Estimated odds ratio = 0.011, p-value < 0.001
+16-17 years:          Estimated odds ratio = 0.009, p-value < 0.001
+
+
+## Sex:
+Girls:                Estimated odds ratio = 1.024, p-value = 0.720
+
+##Burden:
+Burden 1:             Estimated odds ratio = 26.374, p-value = 0.001
+Burden 2:             Estimated odds ratio = 376817.166, p-value = 0.946
+Burden 3:             Estimated odds ratio = 376817.166, p-value = 0.990
+
+
+##2. Also give estimates of the 95% confidence interval of the odds ratios for each predictor in the model [3 points].**
+
+Age Groups:
+2-3 years: 95% CI [0.070, 0.873]
+4-5 years: 95% CI [0.041, 0.466]
+6-7 years: 95% CI [0.017, 0.171]
+8-9 years: 95% CI [0.009, 0.094]
+10-11 years: 95% CI [0.007, 0.067]
+12-13 years: 95% CI [0.005, 0.047]
+14-15 years: 95% CI [0.004, 0.035]
+16-17 years: 95% CI [0.003, 0.029]
+Model 2: Sex and Measles Disease Association
+
+Sex:
+Girls: 95% CI [0.899, 1.166]
+Model 3: Burden and Measles Disease Association
+
+Burden:
+Burden 1: 95% CI [3.702, 187.889]
+Burden 2: 95% CI [0.000, Inf]
+Burden 3: 95% CI [0.000, Inf]
+
+##3. Interpret the results (statistically significant relationship yes/no) for each predictor in the model and also interpret the odds ratios. [6 points].
+**Age:
+There is a statistically significant relationship between all age groups and measles disease (p < 0.05).
+The odds of having a history of measles are 0.246-fold for individuals aged 2-3 years compared to the reference category (aged 0-1 years).
+The odds of having a history of measles are 0.139-fold for individuals aged 4-5 years compared to the reference category (aged 0-1 years).
+The odds of having a history of measles are 0.054-fold for individuals aged 6-7 years compared to the reference category (aged 0-1 years).
+The odds of having a history of measles are 0.030-fold for individuals aged 8-9 years compared to the reference category (aged 0-1 years).
+The odds of having a history of measles are 0.021-fold for individuals aged 10-11 years compared to the reference category (aged 0-1 years).
+The odds of having a history of measles are 0.015-fold for individuals aged 12-13 years compared to the reference category (aged 0-1 years).
+The odds of having a history of measles are 0.011-fold for individuals aged 14-15 years compared to the reference category (aged 0-1 years).
+The odds of having a history of measles are 0.009-fold for individuals aged 16-17 years compared to the reference category (aged 0-1 years).
+
+**Sex:
+There is no statistically significant relationship between sex and measles disease (p = 0.720). 
+The odds of having a history of measles for girls compared to boys is 1.024-fold.
+
+**Burden:
+There is a statistically significant relationship between burden and measles disease (p < 0.001). 
+The odds of having a history of measles are 26.374-fold for individuals with a burden level of 1 compared to the reference category (burden 0).
+The odds of having a history of measles are 376817.166-fold for individuals with a burden level of 1 compared to the reference category (burden 0).
+The odds of having a history of measles are  376817.166-fold for individuals with a burden level of 1 compared to the reference category (burden 0).
+
+**Task c)**: In this data set, do you think this analysis is appropriate for examining the question of
+whether the three variables are related to the chance of ever getting measles? Justify why
+yes/no. [2 point]
+
+- Yes. For answering the above question question, the analysis seems appropriate. 
+
+However The following arguments are against the use of such analysis:
+
+- The logistic regression model provides insight into associations between history of measles infection and the variables age, sex, and burden, however, the nature of association may not be causal, because the study design should allow for such inference.
+
+- The dependent variable of a logistic regression (History of infection with Measles in our case) should be binary, however our variable "e02002" has 3 levels ("yes", "No", "Don't know"). Using the glm() function, the third variable is omitted from the analysis. This might introduce a bias, because answering "Don't know" to the question might not be purely by chance.
+
+- There might be other confounding factors that we have not accounted for in the analysis.
+
+-There might be other factors that are much better predictors of the variable e2002.
+
+- The very high odds ratio for burden levels 2 and 3 is concerning and should be further explored to infer meaning from. 
+
+
+
+
+
